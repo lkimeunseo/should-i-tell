@@ -240,13 +240,9 @@ export default function HomeClient() {
           // 비밀 지킴 게이트
           const adjustedTightLipped = tightLipped[u] * (1 - stimulation * 0.5);
           const rankFactor = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
-          // 1. 성격: 입이 무거운가
-          const speakProb = (100 - adjustedTightLipped) / 100;
-          if (Math.random() > speakProb) continue;
-
-          // 2. 관계: 나와 얼마나 가까운가
-          const closeness = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
-          if (Math.random() > closeness) continue;
+          const wantsToKeep = Math.random() < rankFactor;
+          const cantHelp = Math.random() < (100 - adjustedTightLipped) / 100;
+          if (wantsToKeep && !cantHelp) continue;
 
           // u가 v를 신뢰하는 만큼 말함
           let edgeTrust = trustMap[`${u}-${v}`] ?? 0;
