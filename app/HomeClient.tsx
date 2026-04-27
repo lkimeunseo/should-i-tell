@@ -15,7 +15,6 @@ export default function HomeClient() {
 
   const [baseTrust, setBaseTrust] = useState(60);
 
-  // ★ 인싸/아싸 수 — 랜덤 모드 추가
   const [insiderMode, setInsiderMode] = useState<"manual" | "random">("manual");
   const [insiderCount, setInsiderCount] = useState(5);
   const [outsiderMode, setOutsiderMode] = useState<"manual" | "random">("manual");
@@ -26,12 +25,10 @@ export default function HomeClient() {
   const [node0TightLipped, setNode0TightLipped] = useState(50);
 
   const [steps, setSteps] = useState(5);
-  const [cutoffStep, setCutoffStep] = useState(3);
 
   const [graphFrozen, setGraphFrozen] = useState(false);
   const [avgResult, setAvgResult] = useState<any>(null);
 
-  // ★ 이번에 결정된 랜덤 값들
   const [randomChoices, setRandomChoices] = useState<any>(null);
 
   const frozenGraphRef = useRef<any>(null);
@@ -47,16 +44,14 @@ export default function HomeClient() {
       tightLipped[i] = Math.floor(Math.random() * 100);
     }
 
-    // ★ 노드 0 입무거움: 랜덤이면 결정된 값 저장
     let chosenNode0TightLipped: number;
     if (node0TightLippedMode === "manual") {
       tightLipped[0] = node0TightLipped;
       chosenNode0TightLipped = node0TightLipped;
     } else {
-      chosenNode0TightLipped = tightLipped[0]; // 위에서 이미 랜덤 할당됨
+      chosenNode0TightLipped = tightLipped[0];
     }
 
-    // ★ 인싸/아싸 수: 랜덤이면 0~15 중 무작위
     const chosenInsiderCount = insiderMode === "random"
       ? Math.floor(Math.random() * 16)
       : insiderCount;
@@ -70,7 +65,6 @@ export default function HomeClient() {
     if (node0Type === "insider") insiders.add(0);
     else if (node0Type === "outsider") outsiders.add(0);
 
-    // 인싸 수가 너무 많아 nodeCount 넘지 않게 안전 클램프
     const safeInsider = Math.min(chosenInsiderCount, nodeCount);
     const safeOutsider = Math.min(chosenOutsiderCount, nodeCount - safeInsider);
 
@@ -162,7 +156,6 @@ export default function HomeClient() {
       myRankOf,
       reputation,
       nodeCount,
-      // ★ 결정된 랜덤 값들
       chosen: {
         insiderCount: chosenInsiderCount,
         outsiderCount: chosenOutsiderCount,
@@ -174,14 +167,14 @@ export default function HomeClient() {
   function runOneSim(graph: any) {
     const { neighbors, trustMap, tightLipped, theirRankOfMe, nodeCount } = graph;
 
-    const myFriends = new Set(neighbors[0]);
-    myFriends.add(0);
-
     let informed = new Set([0]);
     let frontier = [0];
     let depthMap: Record<number, number> = { 0: 1 };
     let parent: Record<number, number | null> = { 0: null };
     let spreadEdges = new Set<string>();
+
+    // 자극성: steps가 높을수록 입무거움이 약해짐
+    const stimulation = steps / 10; // 0.1 ~ 1.0
 
     for (let s = 0; s < steps; s++) {
       let next: number[] = [];
@@ -191,47 +184,26 @@ export default function HomeClient() {
         for (let v of neighbors[u]) {
           if (informed.has(v)) continue;
 
-          if (currentDepth > cutoffStep) {
-            const vFriends = neighbors[v] || [];
-            const hasOverlap = vFriends.some((f: number) => myFriends.has(f));
-            if (!hasOverlap) continue;
-          }
-
+          // 비밀 지킴 게이트: 의지(순위) + 능력(입무거움, 자극성에 약화됨)
+          const adjustedTightLipped = tightLipped[u] * (1 - stimulation * 0.5);
           const rankFactor = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
           const wantsToKeep = Math.random() < rankFactor;
-          const cantHelp = Math.random() < (100 - tightLipped[u]) / 100;
+          const cantHelp = Math.random() < (100 - adjustedTightLipped) / 100;
           if (wantsToKeep && !cantHelp) continue;
 
+          // u가 v를 신뢰하는 만큼 말함
           let edgeTrust = trustMap[`${u}-${v}`] ?? 0;
           if (u === 0) {
             edgeTrust = (edgeTrust * baseTrust) / 100;
           }
 
-          let believe = Math.random() < edgeTrust / 100;
-
-          if (!believe) {
-            const rumorSpreadProb = 0.7;
-            if (Math.random() < rumorSpreadProb) {
-              if (Math.random() < (100 - tightLipped[u]) / 100) {
-                informed.add(v);
-                next.push(v);
-                parent[v] = u;
-                depthMap[v] = currentDepth;
-                spreadEdges.add(`${u}-${v}`);
-              }
-            }
-            continue;
-          }
-
-          const spreadProb = (100 - edgeTrust) / 100;
+          const spreadProb = edgeTrust / 100;
           if (Math.random() < spreadProb) {
-            if (Math.random() < (100 - tightLipped[u]) / 100) {
-              informed.add(v);
-              next.push(v);
-              parent[v] = u;
-              depthMap[v] = currentDepth;
-              spreadEdges.add(`${u}-${v}`);
-            }
+            informed.add(v);
+            next.push(v);
+            parent[v] = u;
+            depthMap[v] = currentDepth;
+            spreadEdges.add(`${u}-${v}`);
           }
         }
       }
@@ -369,8 +341,8 @@ export default function HomeClient() {
   return (
     <main style={{ padding: 20 }}>
       <h1>Should I Tell?</h1>
-      <h1>당신은 노드0에게 비밀을 말합니다!</h1>
-      <h1> </h1>
+      <p style={{ fontSize: 18, color: "#666" }}>당신은 노드 0에게 비밀을 말합니다.</p>
+
       <p>노드 0이 나를 신뢰하는 정도(=내 말이 사실이라고 믿는 정도): {baseTrust}</p>
       <input
         type="range"
@@ -380,7 +352,6 @@ export default function HomeClient() {
         onChange={(e) => setBaseTrust(parseInt(e.target.value))}
       />
 
-      {/* ★ 인싸 수: 랜덤/수동 토글 */}
       <div style={{ marginTop: 16 }}>
         <p>노드 0의 주변인 중 인싸 수:</p>
         <button
@@ -402,7 +373,7 @@ export default function HomeClient() {
         </button>
         {insiderMode === "manual" && (
           <div>
-            <p>노드 0의 주변인 중 인싸 수: {insiderCount}</p>
+            <p>인싸 수: {insiderCount}</p>
             <input
               type="range"
               min="0"
@@ -414,7 +385,6 @@ export default function HomeClient() {
         )}
       </div>
 
-      {/* ★ 아싸 수: 랜덤/수동 토글 */}
       <div style={{ marginTop: 16 }}>
         <p>노드 0의 주변인 중 아싸 수:</p>
         <button
@@ -436,7 +406,7 @@ export default function HomeClient() {
         </button>
         {outsiderMode === "manual" && (
           <div>
-            <p>노드 0의 주변인 중 아싸 수: {outsiderCount}</p>
+            <p>아싸 수: {outsiderCount}</p>
             <input
               type="range"
               min="0"
@@ -510,25 +480,20 @@ export default function HomeClient() {
           </div>
         )}
       </div>
-      <p> </p>
-      <p>소문의 자극성: {steps}</p>
-      <input
-        type="range"
-        min="1"
-        max="10"
-        value={steps}
-        onChange={(e) => setSteps(parseInt(e.target.value))}
-      />
 
-      <p>겹지인 체크 시작 단계: {cutoffStep}</p>
-      <p>(나를 모르는 사람일수록 소문이 전파될 확률이 낮아집니다)</p>
-      <input
-        type="range"
-        min="1"
-        max="10"
-        value={cutoffStep}
-        onChange={(e) => setCutoffStep(parseInt(e.target.value))}
-      />
+      <div style={{ marginTop: 16 }}>
+        <p>소문의 자극성: {steps}</p>
+        <p style={{ fontSize: 13, color: "#888" }}>
+          (자극적일수록 더 멀리, 더 활발히 퍼집니다)
+        </p>
+        <input
+          type="range"
+          min="1"
+          max="10"
+          value={steps}
+          onChange={(e) => setSteps(parseInt(e.target.value))}
+        />
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <label>
@@ -545,12 +510,11 @@ export default function HomeClient() {
       <button onClick={runSimulation} style={{ marginTop: 12, marginRight: 8 }}>
         시뮬레이션 실행
       </button>
-      
-      <button onClick={runAverageSimulation} style={{ marginTop: 12, marginLeft: 8  }}>
+
+      <button onClick={runAverageSimulation} style={{ marginTop: 12, marginLeft: 8 }}>
         100번 평균 실행
       </button>
 
-      {/* ★ 결정된 랜덤 값 표시 */}
       {randomChoices && (
         <div style={{ marginTop: 12, padding: 10, background: "#f5f5f5", border: "1px solid #ddd" }}>
           <p style={{ fontWeight: "bold", marginBottom: 4 }}>이번 시뮬레이션 설정</p>
