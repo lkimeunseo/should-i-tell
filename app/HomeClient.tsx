@@ -241,6 +241,8 @@ export default function HomeClient() {
     let depthMap: Record<number, number> = { 0: 1 };
     let parent: Record<number, number | null> = { 0: null };
     let spreadEdges = new Set<string>();
+    let believesMap: Record<number, boolean> = { 0: true }; // ★ 추가
+
 
     const stimulation = steps / 10;
 
@@ -279,11 +281,24 @@ export default function HomeClient() {
 
           if (Math.random() < spreadProb) {
             informed.add(v);
-            next.push(v);
             parent[v] = u;
             depthMap[v] = currentDepth;
             spreadEdges.add(`${u}-${v}`);
-          }
+
+            // ★ 나의 친구만 진위 판단 (나를 알기 때문)
+            if (myFriendsSet.has(v)) {
+              const reverseTrust = trustMap[`${v}-${u}`] ?? 0;
+              const vBelieves = Math.random() < reverseTrust / 100;
+              believesMap[v] = vBelieves;
+              if (vBelieves) {
+                next.push(v);
+              }
+            } else {
+              // 나를 모르는 사람은 그냥 받아들이고 전파
+              believesMap[v] = true;
+              next.push(v);
+            }
+}
         }
       }
 
@@ -307,6 +322,7 @@ export default function HomeClient() {
       strangerReached,
       totalStrangers,
       myFriendsSet,
+      believesMap,
     };
   }
 
@@ -319,7 +335,7 @@ export default function HomeClient() {
       frozenGraphRef.current = graph;
     }
 
-    const { informed, depthMap, parent, spreadEdges, strangerReached, totalStrangers, myFriendsSet } = runOneSim(graph);
+    const { informed, depthMap, parent, spreadEdges, strangerReached, totalStrangers, myFriendsSet, believesMap } = runOneSim(graph);
     const {
       neighbors,
       trustMap,
@@ -356,6 +372,7 @@ export default function HomeClient() {
         reputation: reputation[i],
         depth: depthMap[i] ?? null,
         isMyFriend: myFriendsSet.has(i),
+          believes: believesMap[i] ?? null, // ★ 추가
       });
     }
 
@@ -375,7 +392,7 @@ export default function HomeClient() {
       }
     }
 
-    setGraphData({ nodes, links, neighbors, trustMap, myFriendsSet });
+    setGraphData({ nodes, links, neighbors, trustMap, myFriendsSet, spreadEdges });
     setResult({
       informed: informed.size,
       strangerReached,
@@ -715,6 +732,25 @@ export default function HomeClient() {
                 누구에게서 들었나:{" "}
                 {selectedNode.parent === null ? "초기(나로부터)" : selectedNode.parent}
               </p>
+
+              {/* ★ 나의 친구일 때만 믿었는지 표시 */}
+              {selectedNode.id !== 0 && selectedNode.isMyFriend && (
+                <p>
+                  들은 내용 믿었나:{" "}
+                  {selectedNode.believes ? (
+                    <span style={{ color: "green" }}>예 (다음 사람에게 전달 가능)</span>
+                  ) : (
+                    <span style={{ color: "#888" }}>아니오 (여기서 멈춤)</span>
+                  )}
+                </p>
+              )}
+
+              {/* ★ 나의 친구가 아니면 진위 안 따진다는 안내 */}
+              {selectedNode.id !== 0 && !selectedNode.isMyFriend && (
+                <p style={{ color: "#888", fontSize: 13 }}>
+                  (나를 모르는 사람이라 진위를 따지지 않고 들은 내용을 받아들임)
+                </p>
+              )}
             </>
           ) : (
             <p style={{ color: "#888", fontStyle: "italic" }}>
@@ -723,18 +759,22 @@ export default function HomeClient() {
           )}
 
           <p>친구:</p>
-          <ul>
-            {(graphData.neighbors[selectedNode.id] || []).map((v: number) => {
-              const trustOut = graphData.trustMap[`${selectedNode.id}-${v}`] ?? 0;
-              const trustIn = graphData.trustMap[`${v}-${selectedNode.id}`] ?? 0;
-              const label = v === -1 ? "나" : v;
-              return (
-                <li key={v}>
-                  → {label} | 내가 신뢰: {trustOut} | 상대가 신뢰: {trustIn}
-                </li>
-              );
-            })}
-          </ul>
+            <ul>
+              {(graphData.neighbors[selectedNode.id] || []).map((v: number) => {
+                const trustOut = graphData.trustMap[`${selectedNode.id}-${v}`] ?? 0;
+                const trustIn = graphData.trustMap[`${v}-${selectedNode.id}`] ?? 0;
+                const label = v === -1 ? "나" : v;
+                const spreadToFriend = graphData.spreadEdges?.has(`${selectedNode.id}-${v}`);
+                return (
+                  <li key={v}>
+                    → {label} | 내가 신뢰: {trustOut} | 상대가 신뢰: {trustIn}
+                    {spreadToFriend && (
+                      <span style={{ color: "red", fontWeight: "bold" }}> (전파 성공)</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
         </div>
       )}
 
