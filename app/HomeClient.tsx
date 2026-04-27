@@ -383,7 +383,7 @@ export default function HomeClient() {
 
       {/* ★ 나의 타입 */}
       <div style={{ marginTop: 16 }}>
-        <p>나의 타입:</p>
+        <p>(주어진 상황에서)나의 타입:</p>
         <button
           onClick={() => setMyType("insider")}
           style={{
@@ -391,7 +391,7 @@ export default function HomeClient() {
             marginRight: 4,
           }}
         >
-          인싸 (친구 6명)
+          인싸 (편히 말할 친구 10명 이상)
         </button>
         <button
           onClick={() => setMyType("normal")}
@@ -400,7 +400,7 @@ export default function HomeClient() {
             marginRight: 4,
           }}
         >
-          일반 (친구 4명)
+          일반
         </button>
         <button
           onClick={() => setMyType("outsider")}
@@ -408,7 +408,7 @@ export default function HomeClient() {
             background: myType === "outsider" ? "lightgreen" : "white",
           }}
         >
-          아싸 (친구 2명)
+          아싸 (편히 상담할 친구 3명 이하)
         </button>
       </div>
 
