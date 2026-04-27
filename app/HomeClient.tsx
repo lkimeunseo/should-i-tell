@@ -382,7 +382,7 @@ export default function HomeClient() {
 
       {/* ★ 인싸 수: 랜덤/수동 토글 */}
       <div style={{ marginTop: 16 }}>
-        <p>전체 인싸 수:</p>
+        <p>노드 0의 주변인 중 인싸 수:</p>
         <button
           onClick={() => setInsiderMode("manual")}
           style={{
@@ -436,7 +436,7 @@ export default function HomeClient() {
         </button>
         {outsiderMode === "manual" && (
           <div>
-            <p>아싸 수: {outsiderCount}</p>
+            <p>노드 0의 주변인 중 아싸 수: {outsiderCount}</p>
             <input
               type="range"
               min="0"
