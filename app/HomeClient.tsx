@@ -38,7 +38,8 @@ export default function HomeClient() {
   function buildGraph() {
     // ★ 헬퍼: 친구 사이 양방향 신뢰도 생성 (너무 극단적인 차이 방지)
     function makeMutualTrust(): [number, number] {
-      const base = Math.floor(Math.random() * 100);
+      // 친구 사이는 어느 정도 신뢰 있음 (평균 60+)
+      const base = 30 + Math.floor(Math.random() * 70);
       const variance = 20;
       const trustAB = Math.max(0, Math.min(100,
         base + Math.floor((Math.random() - 0.5) * variance * 2)
@@ -265,12 +266,16 @@ export default function HomeClient() {
             edgeTrust = (edgeTrust * baseTrust) / 100;
           }
 
-          // ★ 겹지인 부스트: v의 친구 중 나의 친구가 많을수록 잘 퍼짐
+          // ★ 겹지인 부스트
           const vFriends = neighbors[v] || [];
           const overlapCount = vFriends.filter((f: number) => myFriendsSet.has(f)).length;
           const overlapBoost = Math.min(overlapCount / 3, 1);
-          // 겹지인 0명: 신뢰도의 30%만 효과, 3명+: 100% 효과
-          const spreadProb = (edgeTrust / 100) * (0.3 + overlapBoost * 0.7);
+
+          // ★ 자극성 부스트
+          const stimBoost = 0.7 + stimulation * 0.3;
+
+          // ★ 신뢰도 × 겹지인 보너스 × 자극성
+          const spreadProb = (edgeTrust / 100) * (0.6 + overlapBoost * 0.4) * stimBoost;
 
           if (Math.random() < spreadProb) {
             informed.add(v);
