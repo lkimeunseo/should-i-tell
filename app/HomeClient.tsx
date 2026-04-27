@@ -20,6 +20,9 @@ export default function HomeClient() {
   const [outsiderMode, setOutsiderMode] = useState<"manual" | "random">("manual");
   const [outsiderCount, setOutsiderCount] = useState(5);
 
+  // ★ 나의 타입
+  const [myType, setMyType] = useState<"insider" | "normal" | "outsider">("normal");
+
   const [node0Type, setNode0Type] = useState<"insider" | "normal" | "outsider">("normal");
   const [node0TightLippedMode, setNode0TightLippedMode] = useState<"random" | "manual">("random");
   const [node0TightLipped, setNode0TightLipped] = useState(50);
@@ -28,17 +31,19 @@ export default function HomeClient() {
 
   const [graphFrozen, setGraphFrozen] = useState(false);
   const [avgResult, setAvgResult] = useState<any>(null);
-
   const [randomChoices, setRandomChoices] = useState<any>(null);
 
   const frozenGraphRef = useRef<any>(null);
 
   function buildGraph() {
-    const nodeCount = 25;
+    const nodeCount = 25; // 노드 0~24
+    // ★ 나(-1)도 포함하는 통합 neighbors/trustMap 사용
     let neighbors: Record<number, number[]> = {};
     let trustMap: Record<string, number> = {};
     let tightLipped: Record<number, number> = {};
 
+    // 모든 노드 + 나(-1) 초기화
+    neighbors[-1] = [];
     for (let i = 0; i < nodeCount; i++) {
       neighbors[i] = [];
       tightLipped[i] = Math.floor(Math.random() * 100);
@@ -81,22 +86,34 @@ export default function HomeClient() {
       if (!insiders.has(x)) outsiders.add(x);
     }
 
+    // ★ 나의 친구 수
+    const myTargetFriends = myType === "insider" ? 6 : myType === "outsider" ? 2 : 4;
+
     const targetFriends: Record<number, number> = {};
+    targetFriends[-1] = myTargetFriends;
     for (let i = 0; i < nodeCount; i++) {
       if (insiders.has(i)) targetFriends[i] = 6;
       else if (outsiders.has(i)) targetFriends[i] = 2;
       else targetFriends[i] = 4;
     }
 
+    // ★ 노드 0은 무조건 나의 친구
+    neighbors[-1].push(0);
+    neighbors[0].push(-1);
+    trustMap[`-1-0`] = Math.floor(Math.random() * 100);
+    trustMap[`0--1`] = Math.floor(Math.random() * 100);
+
+    // 양방향 친구 매칭 (나 포함)
     let attempts = 0;
-    const maxAttempts = nodeCount * nodeCount * 2;
+    const allNodes = [-1, ...Array.from({ length: nodeCount }, (_, i) => i)];
+    const maxAttempts = allNodes.length * allNodes.length * 2;
 
     while (attempts < maxAttempts) {
       attempts++;
 
       const needsMore: number[] = [];
-      for (let i = 0; i < nodeCount; i++) {
-        if (neighbors[i].length < targetFriends[i]) needsMore.push(i);
+      for (const n of allNodes) {
+        if (neighbors[n].length < targetFriends[n]) needsMore.push(n);
       }
       if (needsMore.length < 2) break;
 
@@ -160,6 +177,7 @@ export default function HomeClient() {
         insiderCount: chosenInsiderCount,
         outsiderCount: chosenOutsiderCount,
         node0TightLipped: chosenNode0TightLipped,
+        myFriendCount: neighbors[-1].length,
       },
     };
   }
@@ -167,14 +185,16 @@ export default function HomeClient() {
   function runOneSim(graph: any) {
     const { neighbors, trustMap, tightLipped, theirRankOfMe, nodeCount } = graph;
 
+    // ★ 진짜 나의 친구들
+    const myFriendsSet = new Set<number>(neighbors[-1] || []);
+
     let informed = new Set([0]);
     let frontier = [0];
     let depthMap: Record<number, number> = { 0: 1 };
     let parent: Record<number, number | null> = { 0: null };
     let spreadEdges = new Set<string>();
 
-    // 자극성: steps가 높을수록 입무거움이 약해짐
-    const stimulation = steps / 10; // 0.1 ~ 1.0
+    const stimulation = steps / 10;
 
     for (let s = 0; s < steps; s++) {
       let next: number[] = [];
@@ -182,9 +202,10 @@ export default function HomeClient() {
 
       for (let u of frontier) {
         for (let v of neighbors[u]) {
+          if (v === -1) continue; // 나에게는 전파 안 됨 (이미 알고 있음)
           if (informed.has(v)) continue;
 
-          // 비밀 지킴 게이트: 의지(순위) + 능력(입무거움, 자극성에 약화됨)
+          // 비밀 지킴 게이트
           const adjustedTightLipped = tightLipped[u] * (1 - stimulation * 0.5);
           const rankFactor = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
           const wantsToKeep = Math.random() < rankFactor;
@@ -197,7 +218,13 @@ export default function HomeClient() {
             edgeTrust = (edgeTrust * baseTrust) / 100;
           }
 
-          const spreadProb = edgeTrust / 100;
+          // ★ 겹지인 부스트: v의 친구 중 나의 친구가 많을수록 잘 퍼짐
+          const vFriends = neighbors[v] || [];
+          const overlapCount = vFriends.filter((f: number) => myFriendsSet.has(f)).length;
+          const overlapBoost = Math.min(overlapCount / 3, 1);
+          // 겹지인 0명: 신뢰도의 30%만 효과, 3명+: 100% 효과
+          const spreadProb = (edgeTrust / 100) * (0.3 + overlapBoost * 0.7);
+
           if (Math.random() < spreadProb) {
             informed.add(v);
             next.push(v);
@@ -211,14 +238,13 @@ export default function HomeClient() {
       frontier = next;
     }
 
-    const directFriends = new Set(neighbors[0]);
-    directFriends.add(0);
-
+    // "날 모르는 사람"한테 도달 = 나의 친구가 아닌 사람
     let strangerReached = 0;
-    const totalStrangers = nodeCount - directFriends.size;
+    const totalStrangers = nodeCount - myFriendsSet.size;
 
     for (const id of informed) {
-      if (!directFriends.has(id)) strangerReached++;
+      if (id === 0) continue; // 시작점 제외
+      if (!myFriendsSet.has(id)) strangerReached++;
     }
 
     return {
@@ -228,6 +254,7 @@ export default function HomeClient() {
       spreadEdges,
       strangerReached,
       totalStrangers,
+      myFriendsSet,
     };
   }
 
@@ -240,7 +267,7 @@ export default function HomeClient() {
       frozenGraphRef.current = graph;
     }
 
-    const { informed, depthMap, parent, spreadEdges, strangerReached, totalStrangers } = runOneSim(graph);
+    const { informed, depthMap, parent, spreadEdges, strangerReached, totalStrangers, myFriendsSet } = runOneSim(graph);
     const {
       neighbors,
       trustMap,
@@ -276,13 +303,17 @@ export default function HomeClient() {
         tightLipped: tightLipped[i],
         reputation: reputation[i],
         depth: depthMap[i] ?? null,
+        isMyFriend: myFriendsSet.has(i),
       });
     }
 
+    // ★ 링크 생성: 나(-1)도 포함
     const links: any[] = [];
     const seen = new Set<string>();
-    for (let i = 0; i < nodeCount; i++) {
-      for (const j of neighbors[i]) {
+    const allNodeIds = [-1, ...Array.from({ length: nodeCount }, (_, i) => i)];
+
+    for (const i of allNodeIds) {
+      for (const j of (neighbors[i] || [])) {
         const key = i < j ? `${i}-${j}` : `${j}-${i}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -292,9 +323,7 @@ export default function HomeClient() {
       }
     }
 
-    links.push({ source: -1, target: 0, spread: true });
-
-    setGraphData({ nodes, links, neighbors, trustMap });
+    setGraphData({ nodes, links, neighbors, trustMap, myFriendsSet });
     setResult({
       informed: informed.size,
       strangerReached,
@@ -351,6 +380,37 @@ export default function HomeClient() {
         value={baseTrust}
         onChange={(e) => setBaseTrust(parseInt(e.target.value))}
       />
+
+      {/* ★ 나의 타입 */}
+      <div style={{ marginTop: 16 }}>
+        <p>나의 타입:</p>
+        <button
+          onClick={() => setMyType("insider")}
+          style={{
+            background: myType === "insider" ? "lightgreen" : "white",
+            marginRight: 4,
+          }}
+        >
+          인싸 (친구 6명)
+        </button>
+        <button
+          onClick={() => setMyType("normal")}
+          style={{
+            background: myType === "normal" ? "lightgreen" : "white",
+            marginRight: 4,
+          }}
+        >
+          일반 (친구 4명)
+        </button>
+        <button
+          onClick={() => setMyType("outsider")}
+          style={{
+            background: myType === "outsider" ? "lightgreen" : "white",
+          }}
+        >
+          아싸 (친구 2명)
+        </button>
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <p>노드 0의 주변인 중 인싸 수:</p>
@@ -530,6 +590,7 @@ export default function HomeClient() {
             노드 0의 입무거운 정도: {randomChoices.node0TightLipped}
             {node0TightLippedMode === "random" && " (랜덤)"}
           </p>
+          <p>나의 친구 수: {randomChoices.myFriendCount}명</p>
         </div>
       )}
 
@@ -587,6 +648,10 @@ export default function HomeClient() {
             ✕
           </button>
           <p>노드: {selectedNode.id}</p>
+          {/* ★ 나와 친구 표시 */}
+          {selectedNode.isMyFriend && (
+            <p style={{ color: "green", fontWeight: "bold" }}>★ 나와 친구입니다</p>
+          )}
           <p>내가 보는 이 사람의 순위: {selectedNode.myRankOf}순위</p>
           <p>이 사람이 보는 나의 순위: {selectedNode.theirRankOfMe}순위</p>
           <p>입이 무거운 정도: {selectedNode.tightLipped}</p>
@@ -611,9 +676,10 @@ export default function HomeClient() {
             {(graphData.neighbors[selectedNode.id] || []).map((v: number) => {
               const trustOut = graphData.trustMap[`${selectedNode.id}-${v}`] ?? 0;
               const trustIn = graphData.trustMap[`${v}-${selectedNode.id}`] ?? 0;
+              const label = v === -1 ? "나" : v;
               return (
                 <li key={v}>
-                  → {v} | 내가 신뢰: {trustOut} | 상대가 신뢰: {trustIn}
+                  → {label} | 내가 신뢰: {trustOut} | 상대가 신뢰: {trustIn}
                 </li>
               );
             })}
@@ -646,7 +712,13 @@ export default function HomeClient() {
             ✕
           </button>
           <p>나 (비밀의 원천)</p>
-          <p>노드 0에게 비밀을 말했음</p>
+          <p>친구 수: {graphData.neighbors[-1]?.length ?? 0}명</p>
+          <p>친구:</p>
+          <ul>
+            {(graphData.neighbors[-1] || []).map((v: number) => (
+              <li key={v}>→ {v}</li>
+            ))}
+          </ul>
         </div>
       )}
 
