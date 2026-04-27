@@ -423,7 +423,7 @@ export default function HomeClient() {
             marginRight: 4,
           }}
         >
-          인싸 (편히 말할 친구 10명 이상)
+          인싸 (편히 말할 친구 6명 이상)
         </button>
         <button
           onClick={() => setMyType("normal")}
@@ -440,7 +440,7 @@ export default function HomeClient() {
             background: myType === "outsider" ? "lightgreen" : "white",
           }}
         >
-          아싸 (편히 상담할 친구 3명 이하)
+          아싸 (편히 상담할 친구 2명 이하)
         </button>
       </div>
 
