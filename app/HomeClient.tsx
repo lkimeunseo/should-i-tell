@@ -587,12 +587,24 @@ export default function HomeClient() {
             ✕
           </button>
           <p>노드: {selectedNode.id}</p>
-          <p>나로부터 단계: {selectedNode.depth ?? "전파 안 됨"}</p>
           <p>내가 보는 이 사람의 순위: {selectedNode.myRankOf}순위</p>
           <p>이 사람이 보는 나의 순위: {selectedNode.theirRankOfMe}순위</p>
           <p>입이 무거운 정도: {selectedNode.tightLipped}</p>
           <p>평판: {selectedNode.reputation}</p>
-          <p>누구에게서 들었나: {selectedNode.parent ?? "초기(나로부터)"}</p>
+
+          {selectedNode.depth != null ? (
+            <>
+              <p>나로부터 단계: {selectedNode.depth}</p>
+              <p>
+                누구에게서 들었나:{" "}
+                {selectedNode.parent === null ? "초기(나로부터)" : selectedNode.parent}
+              </p>
+            </>
+          ) : (
+            <p style={{ color: "#888", fontStyle: "italic" }}>
+              이 사람에게는 비밀이 전달되지 않았습니다
+            </p>
+          )}
 
           <p>친구:</p>
           <ul>
