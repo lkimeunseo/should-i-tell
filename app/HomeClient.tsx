@@ -14,12 +14,16 @@ export default function HomeClient() {
   const [selectedNode, setSelectedNode] = useState<any>(null);
 
   const [baseTrust, setBaseTrust] = useState(60);
+
+  // ★ 인싸/아싸 수 — 랜덤 모드 추가
+  const [insiderMode, setInsiderMode] = useState<"manual" | "random">("manual");
   const [insiderCount, setInsiderCount] = useState(5);
+  const [outsiderMode, setOutsiderMode] = useState<"manual" | "random">("manual");
   const [outsiderCount, setOutsiderCount] = useState(5);
 
   const [node0Type, setNode0Type] = useState<"insider" | "normal" | "outsider">("normal");
-  const [node0LoosenessMode, setNode0LoosenessMode] = useState<"random" | "manual">("random");
-  const [node0Looseness, setNode0Looseness] = useState(50);
+  const [node0TightLippedMode, setNode0TightLippedMode] = useState<"random" | "manual">("random");
+  const [node0TightLipped, setNode0TightLipped] = useState(50);
 
   const [steps, setSteps] = useState(5);
   const [cutoffStep, setCutoffStep] = useState(3);
@@ -27,23 +31,38 @@ export default function HomeClient() {
   const [graphFrozen, setGraphFrozen] = useState(false);
   const [avgResult, setAvgResult] = useState<any>(null);
 
+  // ★ 이번에 결정된 랜덤 값들
+  const [randomChoices, setRandomChoices] = useState<any>(null);
+
   const frozenGraphRef = useRef<any>(null);
 
-  // ★ 그래프 구조 생성
   function buildGraph() {
     const nodeCount = 25;
     let neighbors: Record<number, number[]> = {};
     let trustMap: Record<string, number> = {};
-    let looseness: Record<number, number> = {};
+    let tightLipped: Record<number, number> = {};
 
     for (let i = 0; i < nodeCount; i++) {
       neighbors[i] = [];
-      looseness[i] = Math.floor(Math.random() * 100);
+      tightLipped[i] = Math.floor(Math.random() * 100);
     }
 
-    if (node0LoosenessMode === "manual") {
-      looseness[0] = node0Looseness;
+    // ★ 노드 0 입무거움: 랜덤이면 결정된 값 저장
+    let chosenNode0TightLipped: number;
+    if (node0TightLippedMode === "manual") {
+      tightLipped[0] = node0TightLipped;
+      chosenNode0TightLipped = node0TightLipped;
+    } else {
+      chosenNode0TightLipped = tightLipped[0]; // 위에서 이미 랜덤 할당됨
     }
+
+    // ★ 인싸/아싸 수: 랜덤이면 0~15 중 무작위
+    const chosenInsiderCount = insiderMode === "random"
+      ? Math.floor(Math.random() * 16)
+      : insiderCount;
+    const chosenOutsiderCount = outsiderMode === "random"
+      ? Math.floor(Math.random() * 16)
+      : outsiderCount;
 
     let insiders = new Set<number>();
     let outsiders = new Set<number>();
@@ -51,11 +70,19 @@ export default function HomeClient() {
     if (node0Type === "insider") insiders.add(0);
     else if (node0Type === "outsider") outsiders.add(0);
 
-    while (insiders.size < insiderCount) {
+    // 인싸 수가 너무 많아 nodeCount 넘지 않게 안전 클램프
+    const safeInsider = Math.min(chosenInsiderCount, nodeCount);
+    const safeOutsider = Math.min(chosenOutsiderCount, nodeCount - safeInsider);
+
+    let insiderTries = 0;
+    while (insiders.size < safeInsider && insiderTries < 1000) {
+      insiderTries++;
       let x = Math.floor(Math.random() * nodeCount);
       if (!outsiders.has(x)) insiders.add(x);
     }
-    while (outsiders.size < outsiderCount) {
+    let outsiderTries = 0;
+    while (outsiders.size < safeOutsider && outsiderTries < 1000) {
+      outsiderTries++;
       let x = Math.floor(Math.random() * nodeCount);
       if (!insiders.has(x)) outsiders.add(x);
     }
@@ -130,16 +157,22 @@ export default function HomeClient() {
     return {
       neighbors,
       trustMap,
-      looseness,
+      tightLipped,
       theirRankOfMe,
       myRankOf,
       reputation,
       nodeCount,
+      // ★ 결정된 랜덤 값들
+      chosen: {
+        insiderCount: chosenInsiderCount,
+        outsiderCount: chosenOutsiderCount,
+        node0TightLipped: chosenNode0TightLipped,
+      },
     };
   }
 
   function runOneSim(graph: any) {
-    const { neighbors, trustMap, looseness, theirRankOfMe, nodeCount } = graph;
+    const { neighbors, trustMap, tightLipped, theirRankOfMe, nodeCount } = graph;
 
     const myFriends = new Set(neighbors[0]);
     myFriends.add(0);
@@ -166,7 +199,7 @@ export default function HomeClient() {
 
           const rankFactor = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
           const wantsToKeep = Math.random() < rankFactor;
-          const cantHelp = Math.random() < looseness[u] / 100;
+          const cantHelp = Math.random() < (100 - tightLipped[u]) / 100;
           if (wantsToKeep && !cantHelp) continue;
 
           let edgeTrust = trustMap[`${u}-${v}`] ?? 0;
@@ -179,7 +212,7 @@ export default function HomeClient() {
           if (!believe) {
             const rumorSpreadProb = 0.7;
             if (Math.random() < rumorSpreadProb) {
-              if (Math.random() < looseness[u] / 100) {
+              if (Math.random() < (100 - tightLipped[u]) / 100) {
                 informed.add(v);
                 next.push(v);
                 parent[v] = u;
@@ -192,7 +225,7 @@ export default function HomeClient() {
 
           const spreadProb = (100 - edgeTrust) / 100;
           if (Math.random() < spreadProb) {
-            if (Math.random() < looseness[u] / 100) {
+            if (Math.random() < (100 - tightLipped[u]) / 100) {
               informed.add(v);
               next.push(v);
               parent[v] = u;
@@ -239,11 +272,12 @@ export default function HomeClient() {
     const {
       neighbors,
       trustMap,
-      looseness,
+      tightLipped,
       theirRankOfMe,
       myRankOf,
       reputation,
       nodeCount,
+      chosen,
     } = graph;
 
     const nodes: any[] = [];
@@ -267,7 +301,7 @@ export default function HomeClient() {
         myRankOf: myRankOf[i],
         theirRankOfMe: theirRankOfMe[i],
         parent: parent[i] ?? null,
-        looseness: looseness[i],
+        tightLipped: tightLipped[i],
         reputation: reputation[i],
         depth: depthMap[i] ?? null,
       });
@@ -294,6 +328,7 @@ export default function HomeClient() {
       strangerReached,
       totalStrangers,
     });
+    setRandomChoices(chosen);
     setAvgResult(null);
   }
 
@@ -344,23 +379,73 @@ export default function HomeClient() {
         onChange={(e) => setBaseTrust(parseInt(e.target.value))}
       />
 
-      <p>전체 인싸 수: {insiderCount}</p>
-      <input
-        type="range"
-        min="0"
-        max="15"
-        value={insiderCount}
-        onChange={(e) => setInsiderCount(parseInt(e.target.value))}
-      />
+      {/* ★ 인싸 수: 랜덤/수동 토글 */}
+      <div style={{ marginTop: 16 }}>
+        <p>전체 인싸 수:</p>
+        <button
+          onClick={() => setInsiderMode("manual")}
+          style={{
+            background: insiderMode === "manual" ? "lightblue" : "white",
+            marginRight: 4,
+          }}
+        >
+          직접 설정
+        </button>
+        <button
+          onClick={() => setInsiderMode("random")}
+          style={{
+            background: insiderMode === "random" ? "lightblue" : "white",
+          }}
+        >
+          랜덤
+        </button>
+        {insiderMode === "manual" && (
+          <div>
+            <p>인싸 수: {insiderCount}</p>
+            <input
+              type="range"
+              min="0"
+              max="15"
+              value={insiderCount}
+              onChange={(e) => setInsiderCount(parseInt(e.target.value))}
+            />
+          </div>
+        )}
+      </div>
 
-      <p>전체 아싸 수: {outsiderCount}</p>
-      <input
-        type="range"
-        min="0"
-        max="15"
-        value={outsiderCount}
-        onChange={(e) => setOutsiderCount(parseInt(e.target.value))}
-      />
+      {/* ★ 아싸 수: 랜덤/수동 토글 */}
+      <div style={{ marginTop: 16 }}>
+        <p>전체 아싸 수:</p>
+        <button
+          onClick={() => setOutsiderMode("manual")}
+          style={{
+            background: outsiderMode === "manual" ? "lightblue" : "white",
+            marginRight: 4,
+          }}
+        >
+          직접 설정
+        </button>
+        <button
+          onClick={() => setOutsiderMode("random")}
+          style={{
+            background: outsiderMode === "random" ? "lightblue" : "white",
+          }}
+        >
+          랜덤
+        </button>
+        {outsiderMode === "manual" && (
+          <div>
+            <p>아싸 수: {outsiderCount}</p>
+            <input
+              type="range"
+              min="0"
+              max="15"
+              value={outsiderCount}
+              onChange={(e) => setOutsiderCount(parseInt(e.target.value))}
+            />
+          </div>
+        )}
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <p>노드 0(내가 말할 사람) 타입:</p>
@@ -393,33 +478,33 @@ export default function HomeClient() {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <p>노드 0의 입이 싼 정도:</p>
+        <p>노드 0의 입이 무거운 정도:</p>
         <button
-          onClick={() => setNode0LoosenessMode("random")}
+          onClick={() => setNode0TightLippedMode("manual")}
           style={{
-            background: node0LoosenessMode === "random" ? "lightblue" : "white",
+            background: node0TightLippedMode === "manual" ? "lightblue" : "white",
             marginRight: 4,
-          }}
-        >
-          랜덤
-        </button>
-        <button
-          onClick={() => setNode0LoosenessMode("manual")}
-          style={{
-            background: node0LoosenessMode === "manual" ? "lightblue" : "white",
           }}
         >
           직접 설정
         </button>
-        {node0LoosenessMode === "manual" && (
+        <button
+          onClick={() => setNode0TightLippedMode("random")}
+          style={{
+            background: node0TightLippedMode === "random" ? "lightblue" : "white",
+          }}
+        >
+          랜덤
+        </button>
+        {node0TightLippedMode === "manual" && (
           <div>
-            <p>입이 싼 정도: {node0Looseness}</p>
+            <p>입이 무거운 정도: {node0TightLipped}</p>
             <input
               type="range"
               min="0"
               max="100"
-              value={node0Looseness}
-              onChange={(e) => setNode0Looseness(parseInt(e.target.value))}
+              value={node0TightLipped}
+              onChange={(e) => setNode0TightLipped(parseInt(e.target.value))}
             />
           </div>
         )}
@@ -461,6 +546,25 @@ export default function HomeClient() {
       <button onClick={runAverageSimulation} style={{ marginTop: 12 }}>
         100번 평균 실행
       </button>
+
+      {/* ★ 결정된 랜덤 값 표시 */}
+      {randomChoices && (
+        <div style={{ marginTop: 12, padding: 10, background: "#f5f5f5", border: "1px solid #ddd" }}>
+          <p style={{ fontWeight: "bold", marginBottom: 4 }}>이번 시뮬레이션 설정</p>
+          <p>
+            인싸 수: {randomChoices.insiderCount}명
+            {insiderMode === "random" && " (랜덤)"}
+          </p>
+          <p>
+            아싸 수: {randomChoices.outsiderCount}명
+            {outsiderMode === "random" && " (랜덤)"}
+          </p>
+          <p>
+            노드 0의 입무거운 정도: {randomChoices.node0TightLipped}
+            {node0TightLippedMode === "random" && " (랜덤)"}
+          </p>
+        </div>
+      )}
 
       {result && (
         <div style={{ marginTop: 12 }}>
@@ -519,7 +623,7 @@ export default function HomeClient() {
           <p>나로부터 단계: {selectedNode.depth ?? "전파 안 됨"}</p>
           <p>내가 보는 이 사람의 순위: {selectedNode.myRankOf}순위</p>
           <p>이 사람이 보는 나의 순위: {selectedNode.theirRankOfMe}순위</p>
-          <p>입이 싼 정도: {selectedNode.looseness}</p>
+          <p>입이 무거운 정도: {selectedNode.tightLipped}</p>
           <p>평판: {selectedNode.reputation}</p>
           <p>누구에게서 들었나: {selectedNode.parent ?? "초기(나로부터)"}</p>
 
