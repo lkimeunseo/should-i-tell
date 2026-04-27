@@ -36,13 +36,24 @@ export default function HomeClient() {
   const frozenGraphRef = useRef<any>(null);
 
   function buildGraph() {
-    const nodeCount = 50; // 노드 0~24
-    // ★ 나(-1)도 포함하는 통합 neighbors/trustMap 사용
+    // ★ 헬퍼: 친구 사이 양방향 신뢰도 생성 (너무 극단적인 차이 방지)
+    function makeMutualTrust(): [number, number] {
+      const base = Math.floor(Math.random() * 100);
+      const variance = 20;
+      const trustAB = Math.max(0, Math.min(100,
+        base + Math.floor((Math.random() - 0.5) * variance * 2)
+      ));
+      const trustBA = Math.max(0, Math.min(100,
+        base + Math.floor((Math.random() - 0.5) * variance * 2)
+      ));
+      return [trustAB, trustBA];
+    }
+
+    const nodeCount = 50;
     let neighbors: Record<number, number[]> = {};
     let trustMap: Record<string, number> = {};
     let tightLipped: Record<number, number> = {};
 
-    // 모든 노드 + 나(-1) 초기화
     neighbors[-1] = [];
     for (let i = 0; i < nodeCount; i++) {
       neighbors[i] = [];
@@ -86,7 +97,6 @@ export default function HomeClient() {
       if (!insiders.has(x)) outsiders.add(x);
     }
 
-    // ★ 나의 친구 수
     const myTargetFriends = myType === "insider" ? 6 : myType === "outsider" ? 2 : 4;
 
     const targetFriends: Record<number, number> = {};
@@ -100,10 +110,13 @@ export default function HomeClient() {
     // ★ 노드 0은 무조건 나의 친구
     neighbors[-1].push(0);
     neighbors[0].push(-1);
-    trustMap[`-1-0`] = Math.floor(Math.random() * 100);
-    trustMap[`0--1`] = Math.floor(Math.random() * 100);
+    {
+      const [t1, t2] = makeMutualTrust();
+      trustMap[`-1-0`] = t1;
+      trustMap[`0--1`] = t2;
+    }
 
-    // 양방향 친구 매칭 (나 포함)
+    // 양방향 친구 매칭
     let attempts = 0;
     const allNodes = [-1, ...Array.from({ length: nodeCount }, (_, i) => i)];
     const maxAttempts = allNodes.length * allNodes.length * 2;
@@ -138,12 +151,13 @@ export default function HomeClient() {
         neighbors[i].push(j);
         neighbors[j].push(i);
 
-        trustMap[`${i}-${j}`] = Math.floor(Math.random() * 100);
-        trustMap[`${j}-${i}`] = Math.floor(Math.random() * 100);
+        const [t1, t2] = makeMutualTrust();
+        trustMap[`${i}-${j}`] = t1;
+        trustMap[`${j}-${i}`] = t2;
       }
     }
 
-    //마지막 보정 단계 (degree 채우기)
+    // 마지막 보정 단계
     for (const i of allNodes) {
       if (i === -1) continue;
       let safety = 0;
@@ -155,7 +169,7 @@ export default function HomeClient() {
           (j) =>
             j !== i &&
             !neighbors[i].includes(j) &&
-            neighbors[j].length < targetFriends[j] 
+            neighbors[j].length < targetFriends[j]
         );
 
         if (candidates.length === 0) break;
@@ -165,8 +179,9 @@ export default function HomeClient() {
         neighbors[i].push(j);
         neighbors[j].push(i);
 
-        trustMap[`${i}-${j}`] = Math.floor(Math.random() * 100);
-        trustMap[`${j}-${i}`] = Math.floor(Math.random() * 100);
+        const [t1, t2] = makeMutualTrust();
+        trustMap[`${i}-${j}`] = t1;
+        trustMap[`${j}-${i}`] = t2;
       }
     }
 
