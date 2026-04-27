@@ -36,7 +36,7 @@ export default function HomeClient() {
   const frozenGraphRef = useRef<any>(null);
 
   function buildGraph() {
-    const nodeCount = 25; // 노드 0~24
+    const nodeCount = 50; // 노드 0~24
     // ★ 나(-1)도 포함하는 통합 neighbors/trustMap 사용
     let neighbors: Record<number, number[]> = {};
     let trustMap: Record<string, number> = {};
@@ -124,18 +124,50 @@ export default function HomeClient() {
       );
 
       const i = needsMore[needsMore.length - 1];
-      const candidates = needsMore.filter(
-        (j) => j !== i && !neighbors[i].includes(j)
+      const candidates = allNodes.filter(
+        (j) =>
+          j !== i &&
+          !neighbors[i].includes(j) &&
+          neighbors[j].length < targetFriends[j]
       );
       if (candidates.length === 0) break;
 
       const j = candidates[Math.floor(Math.random() * candidates.length)];
 
-      neighbors[i].push(j);
-      neighbors[j].push(i);
+      if (neighbors[j].length < targetFriends[j]) {
+        neighbors[i].push(j);
+        neighbors[j].push(i);
 
-      trustMap[`${i}-${j}`] = Math.floor(Math.random() * 100);
-      trustMap[`${j}-${i}`] = Math.floor(Math.random() * 100);
+        trustMap[`${i}-${j}`] = Math.floor(Math.random() * 100);
+        trustMap[`${j}-${i}`] = Math.floor(Math.random() * 100);
+      }
+    }
+
+    //마지막 보정 단계 (degree 채우기)
+    for (const i of allNodes) {
+      if (i === -1) continue;
+      let safety = 0;
+
+      while (neighbors[i].length < targetFriends[i] && safety < 100) {
+        safety++;
+
+        const candidates = allNodes.filter(
+          (j) =>
+            j !== i &&
+            !neighbors[i].includes(j) &&
+            neighbors[j].length < targetFriends[j] 
+        );
+
+        if (candidates.length === 0) break;
+
+        const j = candidates[Math.floor(Math.random() * candidates.length)];
+
+        neighbors[i].push(j);
+        neighbors[j].push(i);
+
+        trustMap[`${i}-${j}`] = Math.floor(Math.random() * 100);
+        trustMap[`${j}-${i}`] = Math.floor(Math.random() * 100);
+      }
     }
 
     const ranks: number[] = [];
@@ -208,9 +240,13 @@ export default function HomeClient() {
           // 비밀 지킴 게이트
           const adjustedTightLipped = tightLipped[u] * (1 - stimulation * 0.5);
           const rankFactor = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
-          const wantsToKeep = Math.random() < rankFactor;
-          const cantHelp = Math.random() < (100 - adjustedTightLipped) / 100;
-          if (wantsToKeep && !cantHelp) continue;
+          // 1. 성격: 입이 무거운가
+          const speakProb = (100 - adjustedTightLipped) / 100;
+          if (Math.random() > speakProb) continue;
+
+          // 2. 관계: 나와 얼마나 가까운가
+          const closeness = 1 - (theirRankOfMe[u] - 1) / (nodeCount - 1);
+          if (Math.random() > closeness) continue;
 
           // u가 v를 신뢰하는 만큼 말함
           let edgeTrust = trustMap[`${u}-${v}`] ?? 0;
