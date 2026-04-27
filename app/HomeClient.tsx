@@ -370,7 +370,7 @@ export default function HomeClient() {
     <main style={{ padding: 20 }}>
       <h1>Should I Tell?</h1>
       <h1>당신은 노드0에게 비밀을 말합니다!</h1>
-
+      <h1> </h1>
       <p>노드 0이 나를 신뢰하는 정도(=내 말이 사실이라고 믿는 정도): {baseTrust}</p>
       <input
         type="range"
@@ -510,7 +510,7 @@ export default function HomeClient() {
           </div>
         )}
       </div>
-
+      <p> </p>
       <p>소문의 자극성: {steps}</p>
       <input
         type="range"
@@ -545,7 +545,8 @@ export default function HomeClient() {
       <button onClick={runSimulation} style={{ marginTop: 12, marginRight: 8 }}>
         시뮬레이션 실행
       </button>
-      <button onClick={runAverageSimulation} style={{ marginTop: 12 }}>
+      
+      <button onClick={runAverageSimulation} style={{ marginTop: 12, marginLeft: 8  }}>
         100번 평균 실행
       </button>
 
