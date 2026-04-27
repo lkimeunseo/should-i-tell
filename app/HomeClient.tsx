@@ -369,6 +369,7 @@ export default function HomeClient() {
   return (
     <main style={{ padding: 20 }}>
       <h1>Should I Tell?</h1>
+      <h1>당신은 노드0에게 비밀을 말합니다!</h1>
 
       <p>노드 0이 나를 신뢰하는 정도(=내 말이 사실이라고 믿는 정도): {baseTrust}</p>
       <input
@@ -448,7 +449,7 @@ export default function HomeClient() {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <p>노드 0(내가 말할 사람) 타입:</p>
+        <p>노드 0(당신이 말할 사람) 타입:</p>
         <button
           onClick={() => setNode0Type("insider")}
           style={{
@@ -510,7 +511,7 @@ export default function HomeClient() {
         )}
       </div>
 
-      <p>전파 단계 수: {steps}</p>
+      <p>소문의 자극성: {steps}</p>
       <input
         type="range"
         min="1"
@@ -520,6 +521,7 @@ export default function HomeClient() {
       />
 
       <p>겹지인 체크 시작 단계: {cutoffStep}</p>
+      <p>(나를 모르는 사람일수록 소문이 전파될 확률이 낮아집니다)</p>
       <input
         type="range"
         min="1"
