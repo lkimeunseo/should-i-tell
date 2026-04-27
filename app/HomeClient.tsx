@@ -655,7 +655,6 @@ export default function HomeClient() {
           <p>내가 보는 이 사람의 순위: {selectedNode.myRankOf}순위</p>
           <p>이 사람이 보는 나의 순위: {selectedNode.theirRankOfMe}순위</p>
           <p>입이 무거운 정도: {selectedNode.tightLipped}</p>
-          <p>평판: {selectedNode.reputation}</p>
 
           {selectedNode.depth != null ? (
             <>
