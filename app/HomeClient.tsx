@@ -268,16 +268,41 @@ export default function HomeClient() {
             edgeTrust = (edgeTrust * baseTrust) / 100;
           }
 
-          // ★ 겹지인 부스트
+          // ★ 친구 목록
           const vFriends = neighbors[v] || [];
+
+          // ★ 나와의 관계 계산
+          const isDirectFriend = myFriendsSet.has(v);
           const overlapCount = vFriends.filter((f: number) => myFriendsSet.has(f)).length;
-          const overlapBoost = Math.min(overlapCount / 3, 1);
+
+          // ★ 관계 기반 전파 계수 (비선형 핵심)
+          let relationFactor;
+
+          if (isDirectFriend) {
+            // 너무 가까움 → 평판 리스크
+            relationFactor = 0.5;
+
+          } else if (overlapCount === 0) {
+            // 완전 외부
+            relationFactor = 0.75;
+
+          } else if (overlapCount <= 2) {
+            // ★ 핵심: 애매한 연결 (브릿지)
+            relationFactor = 1.1;
+
+          } else {
+            // 너무 얽힘 → 다시 억제
+            relationFactor = 0.85;
+          }
 
           // ★ 자극성 부스트
           const stimBoost = 0.7 + stimulation * 0.3;
 
           // ★ 신뢰도 × 겹지인 보너스 × 자극성
-          const spreadProb = (edgeTrust / 100) * (0.6 + overlapBoost * 0.4) * stimBoost;
+          const spreadProb = 
+          (edgeTrust / 100) *
+          relationFactor *
+          stimBoost;
 
           if (Math.random() < spreadProb) {
             informed.add(v);
